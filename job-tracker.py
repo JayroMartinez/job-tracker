@@ -19,7 +19,7 @@ def _gh_headers() -> dict:
 @st.cache_data(show_spinner=False)
 def load_db():
     user = st.secrets["GITHUB_USER"]
-    repo = st.secrets["GITHUB_REPO"]
+    repo = st.secrets["GITHUB_REPO_DATA"]
     branch = st.secrets.get("BRANCH", "main")
     path = st.secrets.get("FILE_PATH", "jobs.csv")
 
@@ -50,7 +50,7 @@ def load_db():
 
 def save_db(df: pd.DataFrame, previous_sha: Optional[str], msg: str) -> str:
     user = st.secrets["GITHUB_USER"]
-    repo = st.secrets["GITHUB_REPO"]
+    repo = st.secrets["GITHUB_REPO_DATA"]
     branch = st.secrets.get("BRANCH", "main")
     path = st.secrets.get("FILE_PATH", "jobs.csv")
 
