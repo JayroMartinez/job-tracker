@@ -79,7 +79,7 @@ This app is ready for Streamlit Community Cloud:
 
 1. Go to [https://share.streamlit.io](https://share.streamlit.io) → **New app** → **Deploy a public app from GitHub**
 2. Select your **job-tracker** repository, branch `main`, and `job-tracker.py` as the main file.
-3. In **Settings → Secrets**, add the same five secrets (GitHub PAT, username, data repo, branch, file path).
+3. In **Settings → Secrets**, add the same five secrets you condigured above (GitHub PAT, username, data repo, branch, file path).
 4. Click **Deploy**. Your live app will securely read/write data in the private repo.
 
 ---
@@ -100,6 +100,3 @@ job-tracker-data/      # Private data repository
 
 ---
 
-## License
-
-MIT © Your Name
