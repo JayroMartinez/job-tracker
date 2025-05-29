@@ -5,13 +5,14 @@ import base64
 import io
 from datetime import date
 import uuid
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # GitHub helpers
 # ---------------------------------------------------------------------------
 
 def _gh_headers() -> dict:
-    """Default headers for GitHub API requests."""
+    """Return default headers for GitHub API requests."""
     return {
         "Authorization": f"Bearer {st.secrets['GITHUB_TOKEN']}",
         "Accept": "application/vnd.github+json",
@@ -20,10 +21,9 @@ def _gh_headers() -> dict:
 
 @st.cache_data(show_spinner=False)
 def load_db():
-    """Download CSV from GitHub and return a tuple (DataFrame, sha).
+    """Download jobs.csv from GitHub and return (DataFrame, sha).
 
-    If the file does not exist yet the function returns an empty DataFrame and
-    ``None`` for the sha value.
+    If the file does not exist yet, return an empty DataFrame and ``None`` as sha.
     """
     user = st.secrets["GITHUB_USER"]
     repo = st.secrets["GITHUB_REPO"]
@@ -60,7 +60,7 @@ def load_db():
     st.stop()
 
 
-def save_db(df: pd.DataFrame, previous_sha: str | None, commit_message: str) -> str:
+def save_db(df: pd.DataFrame, previous_sha: Optional[str], commit_message: str) -> str:
     """Commit the updated CSV to GitHub and return the new sha.
 
     The function stops Streamlit execution on error.
@@ -158,7 +158,7 @@ filtered_df = st.session_state["df"].copy()
 if search_company:
     filtered_df = filtered_df[filtered_df["company"].str.contains(search_company, case=False, na=False)]
 if hide_rejected:
-    filtered_df = filtered_df[filtered_df["rejected"] is False]
+    filtered_df = filtered_df[filtered_df["rejected"] == False]
 
 filtered_df = filtered_df.sort_values("submission_date", ascending=False)
 
