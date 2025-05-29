@@ -43,7 +43,7 @@ A Streamlit app to track job applications. The application code is public; your 
    BRANCH           = "main"
    FILE_PATH        = "jobs.csv"
    ```
-   * Use the exact repository name you created in step 2 for GITHUB_REPO_DATA.
+   * Use the exact repository name you created in step 2 for `GITHUB_REPO_DATA`.
    * Streamlit reads these via `st.secrets[...]`.
    * In Streamlit Community Cloud, set identical secrets in the app’s **Settings → Secrets** panel.
 
