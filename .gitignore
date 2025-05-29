@@ -1,0 +1,44 @@
+# --- Entornos virtuales ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+
+# --- Bytecode / cachés de Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dll
+
+# --- Cachés de herramientas ---
+.mypy_cache/
+.pytest_cache/
+.coverage
+.cache/
+dist/
+build/
+.eggs/
+
+# --- Notebooks temporales ---
+.ipynb_checkpoints/
+
+# --- Configuración de IDEs ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- macOS / Finder ---
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- Archivos de Streamlit que NO quieres exponer ---
+.streamlit/secrets.toml
+
+# --- Logs y temporales varios ---
+*.log
+*.tmp
+*.bak
