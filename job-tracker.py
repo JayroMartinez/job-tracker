@@ -188,7 +188,7 @@ if df2.empty:
 else:
     cols = st.columns([3,3,2,2,3,3])
     for col, h in zip(cols, ["Company","Position","Location","Submission date","Notes","Actions"]):
-        col.write(f"**{h}**")
+        col.write(f"**{h.upper}**")
     for i, row in df2.iterrows():
         rc = st.columns([3,3,2,2,3,3])
         rc[0].write(row.company)
