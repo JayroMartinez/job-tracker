@@ -123,18 +123,22 @@ def render_row_actions(idx, row):
     # Delete with confirm
     cid = st.session_state.get("confirm_delete_id")
     if cid == row.id:
+        # Confirmation prompt with colored labels
+        c3.markdown("<span style='color:red'>Confirm</span>", unsafe_allow_html=True)
         if c3.button("Confirm", key=f"conf_{row.id}"):
-            c3.markdown("<span style='color:red'>Confirm</span>", unsafe_allow_html=True)
             df = st.session_state["df"].drop(idx).reset_index(drop=True)
             st.session_state["df"] = df
             st.session_state["sha"] = save_db(df, st.session_state["sha"], f"chore: delete {row.company}")
             reset_states()
             st.rerun()
+        c3.markdown("<span style='color:green'>Cancel</span>", unsafe_allow_html=True)
         if c3.button("Cancel", key=f"cancel_{row.id}"):
-            c3.markdown("<span style='color:green'>Cancel</span>", unsafe_allow_html=True)
             st.session_state.pop("confirm_delete_id")
             st.rerun()
     else:
+        if c3.button("Delete", key=f"del_{row.id}"):
+            st.session_state["confirm_delete_id"] = row.id
+            st.rerun()
         if c3.button("Delete", key=f"del_{row.id}"):
             st.session_state["confirm_delete_id"] = row.id
             st.rerun()
