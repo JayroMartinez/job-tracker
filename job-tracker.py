@@ -175,28 +175,34 @@ if search:
     df = df[df.company.str.contains(search, case=False, na=False)]
 if hide_rej:
     df = df[df.rejected == False]
-# Sort newest first
 try:
     df = df.sort_values("submission_date", ascending=False)
 except:
     pass
 
-st.subheader("My applications")
-if df.empty:
-    st.info("No applications to display.")
-else:
-    headers = ["Company", "Position", "Location", "Submission date", "Notes", "Actions"]
-    cols = st.columns([3,3,2,2,3,3])
-    for col, h in zip(cols, headers):
-        col.write(f"**{h}**")
-    for idx, row in df.iterrows():
+# Provide two views: custom list and table for responsive/mobile
+tab_list, tab_table = st.tabs(["List", "Table"])
+
+with tab_list:
+    st.subheader("My applications")
+    if df.empty:
+        st.info("No applications to display.")
+    else:
+        headers = ["Company", "Position", "Location", "Submission date", "Notes", "Actions"]
         cols = st.columns([3,3,2,2,3,3])
-        cols[0].write(row.company)
-        cols[1].write(row.position)
-        cols[2].write(row.location or "-")
-        # Display date in dd/mm/yyyy
-        date_str = row.submission_date.strftime("%d/%m/%Y") if pd.notna(row.submission_date) else "-"
-        cols[3].write(date_str)
-        cols[4].write(row.notes or "-")
-        with cols[5]:
-            render_row_actions(idx, row)
+        for col, h in zip(cols, headers):
+            col.write(f"**{h}**")
+        for idx, row in df.iterrows():
+            row_cols = st.columns([3,3,2,2,3,3])
+            row_cols[0].write(row.company)
+            row_cols[1].write(row.position)
+            row_cols[2].write(row.location or "-")
+            date_str = row.submission_date.strftime("%d/%m/%Y") if pd.notna(row.submission_date) else "-"
+            row_cols[3].write(date_str)
+            row_cols[4].write(row.notes or "-")
+            with row_cols[5]:
+                render_row_actions(idx, row)
+
+with tab_table:
+    st.subheader("Table view")
+    st.dataframe(df, use_container_width=True)
