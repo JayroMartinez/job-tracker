@@ -7,9 +7,10 @@ from datetime import date
 import uuid
 from typing import Optional
 
-# ---------------------------------------------------------------------------
+# ------------------------------------
 # GitHub helpers
-# ---------------------------------------------------------------------------
+# ------------------------------------
+
 def _gh_headers() -> dict:
     return {
         "Authorization": f"Bearer {st.secrets['GITHUB_TOKEN']}",
@@ -20,150 +21,170 @@ def _gh_headers() -> dict:
 def load_db():
     user = st.secrets["GITHUB_USER"]
     repo = st.secrets["GITHUB_REPO_DATA"]
-    branch = st.secrets.get("BRANCH", "main")
-    path = st.secrets.get("FILE_PATH", "jobs.csv")
+    branch = st.secrets["BRANCH"]
+    path = st.secrets["FILE_PATH"]
 
     url = f"https://api.github.com/repos/{user}/{repo}/contents/{path}"
     params = {"ref": branch}
-
     with httpx.Client(timeout=20) as client:
-        response = client.get(url, headers=_gh_headers(), params=params)
-
-    if response.status_code == 200:
-        data = response.json()
+        r = client.get(url, headers=_gh_headers(), params=params)
+    if r.status_code == 200:
+        data = r.json()
         csv_bytes = base64.b64decode(data["content"])
-        csv_str = csv_bytes.decode()
-        df = pd.read_csv(io.StringIO(csv_str))
-        if "submission_date" in df.columns:
-            df["submission_date"] = pd.to_datetime(df["submission_date"], errors="coerce")
-        if "notes" in df.columns:
-            df["notes"] = df["notes"].fillna("")
-        sha = data["sha"]
-        return df, sha
-
-    if response.status_code == 404:
-        cols = ["id", "company", "position", "location", "submission_date", "notes", "rejected"]
+        df = pd.read_csv(io.StringIO(csv_bytes.decode()))
+        df["submission_date"] = pd.to_datetime(df.get("submission_date", []), errors="coerce")
+        df["notes"] = df.get("notes", pd.Series()).fillna("")
+        return df, data["sha"]
+    if r.status_code == 404:
+        cols = ["id","company","position","location","submission_date","notes","rejected"]
         return pd.DataFrame(columns=cols), None
-
-    st.error(f"GitHub API error {response.status_code}: {response.text}")
+    st.error(f"GitHub API error {r.status_code}: {r.text}")
     st.stop()
 
-def save_db(df: pd.DataFrame, previous_sha: Optional[str], msg: str) -> str:
+def save_db(df: pd.DataFrame, prev_sha: Optional[str], message: str) -> str:
     user = st.secrets["GITHUB_USER"]
     repo = st.secrets["GITHUB_REPO_DATA"]
-    branch = st.secrets.get("BRANCH", "main")
-    path = st.secrets.get("FILE_PATH", "jobs.csv")
+    branch = st.secrets["BRANCH"]
+    path = st.secrets["FILE_PATH"]
 
     url = f"https://api.github.com/repos/{user}/{repo}/contents/{path}"
-    csv_str = df.to_csv(index=False)
-    payload = {"message": msg, "content": base64.b64encode(csv_str.encode()).decode(), "branch": branch}
-    if previous_sha:
-        payload["sha"] = previous_sha
-
+    content = base64.b64encode(df.to_csv(index=False).encode()).decode()
+    payload = {"message": message, "content": content, "branch": branch}
+    if prev_sha:
+        payload["sha"] = prev_sha
     with httpx.Client(timeout=20) as client:
-        response = client.put(url, headers=_gh_headers(), json=payload)
-
-    if response.status_code in (200, 201):
-        return response.json()["content"]["sha"]
-    if response.status_code == 409:
-        st.error("Conflict: CSV changed on GitHub. Reload and retry.")
+        r = client.put(url, headers=_gh_headers(), json=payload)
+    if r.status_code in (200,201):
+        return r.json()["content"]["sha"]
+    if r.status_code == 409:
+        st.error("Conflict: data changed remotely. Refresh and try again.")
         st.stop()
-    st.error(f"GitHub save error ({response.status_code}): {response.text}")
+    st.error(f"Failed to save: {r.status_code} {r.text}")
     st.stop()
 
-# ---------------------------------------------------------------------------
+# ------------------------------------
 # UI helpers
-# ---------------------------------------------------------------------------
-def add_application_form():
-    with st.form("new_app", clear_on_submit=True):
-        st.subheader("Add new application")
-        company = st.text_input("Company")
-        position = st.text_input("Position")
-        location = st.text_input("Location (optional)")
-        submission_date = st.date_input("Submission date", date.today())
-        notes = st.text_input("Notes / salary (optional)")
-        submit = st.form_submit_button("Save application")
+# ------------------------------------
 
-        if submit:
-            if not company or not position:
-                st.warning("Fields 'Company' and 'Position' are required.")
-                st.stop()
-            new_row = {
-                "id": str(uuid.uuid4()),
-                "company": company,
-                "position": position,
-                "location": location,
-                "submission_date": pd.Timestamp(submission_date),
-                "notes": notes,
-                "rejected": False
-            }
-            st.session_state["df"] = pd.concat([st.session_state["df"], pd.DataFrame([new_row])], ignore_index=True)
-            new_sha = save_db(st.session_state["df"], st.session_state["sha"], f"feat: add {company} {position}")
+def reset_states():
+    for key in ["show_form","edit_id","confirm_delete_id"]:
+        st.session_state.pop(key, None)
+
+
+def render_add_edit_form(is_edit=False):
+    entry = None
+    if is_edit and st.session_state.get("edit_id"):
+        df = st.session_state["df"]
+        entry = df[df.id == st.session_state["edit_id"]].iloc[0]
+    with st.form("entry_form", clear_on_submit=False):
+        st.subheader("Edit application" if is_edit else "Add new application")
+        comp = st.text_input("Company", value=entry.company if entry is not None else "")
+        pos = st.text_input("Position", value=entry.position if entry is not None else "")
+        loc = st.text_input("Location (optional)", value=entry.location if entry is not None else "")
+        sub_date = st.date_input("Submission date", value=entry.submission_date.date() if entry is not None and pd.notna(entry.submission_date) else date.today())
+        note = st.text_input("Notes / salary (optional)", value=entry.notes if entry is not None else "")
+        submitted = st.form_submit_button("Save")
+        if submitted:
+            if not comp or not pos:
+                st.warning("Company and Position are required.")
+                return
+            df = st.session_state["df"]
+            if is_edit:
+                idx = df.index[df.id == st.session_state["edit_id"]][0]
+                df.at[idx, ["company","position","location","submission_date","notes"]] = [comp,pos,loc,pd.Timestamp(sub_date),note]
+                msg = f"chore: update {comp} {pos}"
+                st.session_state.pop("edit_id")
+            else:
+                new = {"id": str(uuid.uuid4()),"company": comp,"position": pos,
+                       "location": loc,"submission_date": pd.Timestamp(sub_date),
+                       "notes": note,"rejected": False}
+                df = pd.concat([df,pd.DataFrame([new])], ignore_index=True)
+                st.session_state["df"] = df
+                msg = f"feat: add {comp} {pos}"
+                st.session_state["show_form"] = False
+            new_sha = save_db(st.session_state["df"], st.session_state["sha"], msg)
             st.session_state["sha"] = new_sha
-            st.session_state["show_form"] = False
-            st.success("Application saved and synced with GitHub.")
+            reset_states()
             st.rerun()
 
-def render_row_controls(idx: int, row: pd.Series):
-    col1, col2 = st.columns([1, 1])
-    if not row["rejected"]:
-        if col1.button("Reject", key=f"rej_{row['id']}"):
-            st.session_state["df"].at[idx, "rejected"] = True
-            new_sha = save_db(st.session_state["df"], st.session_state["sha"], f"chore: reject {row['company']}")
-            st.session_state["sha"] = new_sha
+
+def render_row_actions(idx, row):
+    c1,c2,c3 = st.columns([1,1,1])
+    # Reject
+    if not row.rejected:
+        if c1.button("Reject", key=f"rej_{row.id}"):
+            st.session_state["df"].at[idx,"rejected"] = True
+            st.session_state["sha"] = save_db(st.session_state["df"], st.session_state["sha"], f"chore: reject {row.company}")
             st.rerun()
     else:
-        col1.markdown("<span style='color:red;'>Rejected</span>", unsafe_allow_html=True)
-    if col2.button("Delete", key=f"del_{row['id']}"):
-        st.session_state["df"] = st.session_state["df"].drop(idx).reset_index(drop=True)
-        new_sha = save_db(st.session_state["df"], st.session_state["sha"], f"chore: delete {row['company']}")
-        st.session_state["sha"] = new_sha
+        c1.markdown("<span style='color:red'>Rejected</span>", unsafe_allow_html=True)
+    # Edit
+    if c2.button("Edit", key=f"edit_{row.id}"):
+        st.session_state["edit_id"] = row.id
+        st.session_state["show_form"] = False
         st.rerun()
+    # Delete with confirm
+    cid = st.session_state.get("confirm_delete_id")
+    if cid == row.id:
+        if c3.button("Confirm?", key=f"conf_{row.id}"):
+            df = st.session_state["df"].drop(idx).reset_index(drop=True)
+            st.session_state["df"] = df
+            st.session_state["sha"] = save_db(df, st.session_state["sha"], f"chore: delete {row.company}")
+            reset_states()
+            st.rerun()
+        if c3.button("Cancel", key=f"cancel_{row.id}"):
+            st.session_state.pop("confirm_delete_id")
+            st.rerun()
+    else:
+        if c3.button("Delete", key=f"del_{row.id}"):
+            st.session_state["confirm_delete_id"] = row.id
+            st.rerun()
 
+# ------------------------------------
 # Main
-st.set_page_config(page_title="Job Tracker", layout="wide")
-if "df" not in st.session_state:
-    df_init, sha_init = load_db()
-    st.session_state["df"] = df_init
-    st.session_state["sha"] = sha_init
-    st.session_state["show_form"] = False
+# ------------------------------------
+st.set_page_config(page_title="Job Applications Tracker", layout="wide")
+# Load or refresh data
+if "df" not in st.session_state or st.button("Refresh", key="refresh_btn"):
+    st.cache_data.clear()
+    df, sha = load_db()
+    st.session_state.update({"df": df, "sha": sha})
 
+# Page header and controls
 st.title("Job Applications Tracker")
-col_f1, col_f2, col_f3 = st.columns([3, 1, 1])
-search_txt = col_f1.text_input("Search by company")
-hide_rej = col_f2.checkbox("Hide rejected", value=False)
-add_btn = col_f3.button("Add application")
-if add_btn:
+c1,c2,c3 = st.columns([3,1,1])
+search = c1.text_input("Search by company")
+hide_rej = c2.checkbox("Hide rejected", value=False)
+if c3.button("Add application"):
     st.session_state["show_form"] = True
+    st.session_state.pop("edit_id", None)
 
-filtered = st.session_state["df"].copy()
-if search_txt:
-    filtered = filtered[filtered["company"].str.contains(search_txt, case=False, na=False)]
+# Show add/edit form above list if needed
+if st.session_state.get("show_form") or st.session_state.get("edit_id"):
+    render_add_edit_form(is_edit=bool(st.session_state.get("edit_id")))
+    st.divider()
+
+# Filter and display
+df = st.session_state["df"].copy()
+if search:
+    df = df[df.company.str.contains(search, case=False, na=False)]
 if hide_rej:
-    filtered = filtered[filtered["rejected"] == False]
-filtered = filtered.sort_values("submission_date", ascending=False)
+    df = df[df.rejected==False]
+df = df.sort_values("submission_date", ascending=False)
 
 st.subheader("My applications")
-if filtered.empty:
+if df.empty:
     st.info("No applications to display.")
 else:
-    header_cols = st.columns([3, 3, 2, 2, 2, 4])
-    header_cols[0].write("**Company**")
-    header_cols[1].write("**Position**")
-    header_cols[2].write("**Location**")
-    header_cols[3].write("**Submission date**")
-    header_cols[4].write("**Notes**")
-    header_cols[5].write("**Actions**")
-    for idx, row in filtered.iterrows():
-        cols = st.columns([3, 3, 2, 2, 2, 4])
-        cols[0].write(row["company"])
-        cols[1].write(row["position"])
-        cols[2].write(row["location"] or "-")
-        cols[3].write(row["submission_date"].date() if pd.notna(row["submission_date"]) else "-")
-        cols[4].write(row["notes"] or "")
+    headers = ["Company","Position","Location","Submission date","Notes","Actions"]
+    cols = st.columns([3,3,2,2,3,3])
+    for col, h in zip(cols, headers): col.write(f"**{h}**")
+    for idx,row in df.iterrows():
+        cols = st.columns([3,3,2,2,3,3])
+        cols[0].write(row.company)
+        cols[1].write(row.position)
+        cols[2].write(row.location or "-")
+        cols[3].write(row.submission_date.date() if pd.notna(row.submission_date) else "-")
+        cols[4].write(row.notes or "-")
         with cols[5]:
-            render_row_controls(idx, row)
-
-if st.session_state["show_form"]:
-    st.divider()
-    add_application_form()
+            render_row_actions(idx, row)
