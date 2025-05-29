@@ -79,8 +79,14 @@ def render_add_edit_form(is_edit=False):
         comp = st.text_input("Company", value=entry.company if entry is not None else "")
         pos = st.text_input("Position", value=entry.position if entry is not None else "")
         loc = st.text_input("Location (optional)", value=entry.location if entry is not None else "")
-        sub_date = st.date_input("Submission date", value=(entry.submission_date.date() if entry is not None and pd.notna(entry.submission_date) else date.today()))
-        note = st.text_input("Notes / salary (optional)", value=entry.notes if entry is not None else "")
+        sub_date = st.date_input(
+            "Submission date",
+            value=(entry.submission_date.date() if entry is not None and pd.notna(entry.submission_date) else date.today()),
+        )
+        note = st.text_input(
+            "Notes / salary (optional)",
+            value=entry.notes if entry is not None else ""
+        )
         submitted = st.form_submit_button("Save")
         if submitted:
             if not comp or not pos:
@@ -89,18 +95,28 @@ def render_add_edit_form(is_edit=False):
             df = st.session_state["df"]
             if is_edit:
                 idx = df.index[df.id == st.session_state["edit_id"]][0]
-                df.loc[idx, ["company","position","location","submission_date","notes"]] = [comp, pos, loc, pd.Timestamp(sub_date), note]
+                df.loc[idx, ["company","position","location","submission_date","notes"]] = [
+                    comp, pos, loc, pd.Timestamp(sub_date), note
+                ]
                 message = f"chore: update {comp} {pos}"
                 st.session_state.pop("edit_id")
             else:
-                new = {"id": str(uuid.uuid4()), "company": comp, "position": pos,
-                       "location": loc, "submission_date": pd.Timestamp(sub_date),
-                       "notes": note, "rejected": False}
+                new = {
+                    "id": str(uuid.uuid4()),
+                    "company": comp,
+                    "position": pos,
+                    "location": loc,
+                    "submission_date": pd.Timestamp(sub_date),
+                    "notes": note,
+                    "rejected": False,
+                }
                 df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
                 st.session_state["df"] = df
                 message = f"feat: add {comp} {pos}"
                 st.session_state["show_form"] = False
-            st.session_state["sha"] = save_db(st.session_state["df"], st.session_state["sha"], message)
+            st.session_state["sha"] = save_db(
+                st.session_state["df"], st.session_state["sha"], message
+            )
             reset_states()
             st.rerun()
 
@@ -111,7 +127,9 @@ def render_row_actions(idx, row):
     if not row.rejected:
         if c1.button("Reject", key=f"rej_{row.id}"):
             st.session_state["df"].at[idx, "rejected"] = True
-            st.session_state["sha"] = save_db(st.session_state["df"], st.session_state["sha"], f"chore: reject {row.company}")
+            st.session_state["sha"] = save_db(
+                st.session_state["df"], st.session_state["sha"], f"chore: reject {row.company}"
+            )
             st.rerun()
     else:
         c1.markdown("<span style='color:red'>Rejected</span>", unsafe_allow_html=True)
@@ -123,12 +141,13 @@ def render_row_actions(idx, row):
     # Delete with confirm
     cid = st.session_state.get("confirm_delete_id")
     if cid == row.id:
-        # Confirmation prompt with colored labels
         c3.markdown("<span style='color:red'>Confirm</span>", unsafe_allow_html=True)
         if c3.button("Confirm", key=f"conf_{row.id}"):
             df = st.session_state["df"].drop(idx).reset_index(drop=True)
             st.session_state["df"] = df
-            st.session_state["sha"] = save_db(df, st.session_state["sha"], f"chore: delete {row.company}")
+            st.session_state["sha"] = save_db(
+                df, st.session_state["sha"], f"chore: delete {row.company}"
+            )
             reset_states()
             st.rerun()
         c3.markdown("<span style='color:green'>Cancel</span>", unsafe_allow_html=True)
@@ -136,9 +155,6 @@ def render_row_actions(idx, row):
             st.session_state.pop("confirm_delete_id")
             st.rerun()
     else:
-        if c3.button("Delete", key=f"del_{row.id}"):
-            st.session_state["confirm_delete_id"] = row.id
-            st.rerun()
         if c3.button("Delete", key=f"del_{row.id}"):
             st.session_state["confirm_delete_id"] = row.id
             st.rerun()
@@ -150,8 +166,7 @@ def render_row_actions(idx, row):
 st.set_page_config(page_title="Job Applications Tracker", layout="wide")
 
 # Load or refresh data
-if "df" not in st.session_state or st.button("Refresh", key="refresh_btn"):
-    st.cache_data.clear()
+if "df" not in st.session_state:
     df, sha = load_db()
     st.session_state.update({"df": df, "sha": sha})
 
@@ -180,29 +195,21 @@ try:
 except:
     pass
 
-# Provide two views: custom list and table for responsive/mobile
-tab_list, tab_table = st.tabs(["List", "Table"])
-
-with tab_list:
-    st.subheader("My applications")
-    if df.empty:
-        st.info("No applications to display.")
-    else:
-        headers = ["Company", "Position", "Location", "Submission date", "Notes", "Actions"]
-        cols = st.columns([3,3,2,2,3,3])
-        for col, h in zip(cols, headers):
-            col.write(f"**{h}**")
-        for idx, row in df.iterrows():
-            row_cols = st.columns([3,3,2,2,3,3])
-            row_cols[0].write(row.company)
-            row_cols[1].write(row.position)
-            row_cols[2].write(row.location or "-")
-            date_str = row.submission_date.strftime("%d/%m/%Y") if pd.notna(row.submission_date) else "-"
-            row_cols[3].write(date_str)
-            row_cols[4].write(row.notes or "-")
-            with row_cols[5]:
-                render_row_actions(idx, row)
-
-with tab_table:
-    st.subheader("Table view")
-    st.dataframe(df, use_container_width=True)
+st.subheader("My applications")
+if df.empty:
+    st.info("No applications to display.")
+else:
+    headers = ["Company", "Position", "Location", "Submission date", "Notes", "Actions"]
+    cols = st.columns([3,3,2,2,3,3])
+    for col, h in zip(cols, headers):
+        col.write(f"**{h}**")
+    for idx, row in df.iterrows():
+        row_cols = st.columns([3,3,2,2,3,3])
+        row_cols[0].write(row.company)
+        row_cols[1].write(row.position)
+        row_cols[2].write(row.location or "-")
+        date_str = row.submission_date.strftime("%d/%m/%Y") if pd.notna(row.submission_date) else "-"
+        row_cols[3].write(date_str)
+        row_cols[4].write(row.notes or "-")
+        with row_cols[5]:
+            render_row_actions(idx, row)
