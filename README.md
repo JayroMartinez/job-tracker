@@ -68,7 +68,7 @@ In your private **job-tracker-data** repository, the `jobs.csv` must have the fo
 | `position`        | string  | Job title                               |
 | `location`        | string  | Optional; location text                 |
 | `submission_date` | date    | ISO YYYY-MM-DD, displayed as DD/MM/YYYY |
-| `notes`           | string  | Optional notes or salary text           |
+| `notes`           | string  | Optional notes                          |
 | `rejected`        | boolean | `True` or `False` indicating rejection  |
 
 ---
